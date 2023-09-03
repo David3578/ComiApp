@@ -129,21 +129,38 @@ BEGIN
 	where match (Plato, descripcion) AGAINST (Cadena IN BOOLEAN MODE)
 	or match (restaurante) AGAINST (Cadena in boolean mode);
 END$$
-DELIMITER //
-CREATE TRIGGER incrementar_monto_venta AFTER INSERT ON VentaResto FOR EACH ROW
+--
+DELIMITER $$
+CREATE TRIGGER IncrementarMontoVenta AFTER INSERT ON PlatoPedido FOR EACH ROW
 BEGIN
-    DECLARE venta_id INT;
-    SELECT idRestaurante INTO venta_id 
-    FROM VentaResto 
-    WHERE idPLato = NEW.idPlato;
-    IF venta_id IS NULL THEN
-        INSERT INTO VentaResto (idPlato, monto) 
-			VALUES (NEW.idPlato, NEW.monto);
+    DECLARE ventaExistente INT;
+    SELECT COUNT(*) INTO ventaExistente
+    FROM VentaResto
+    WHERE idRestaurant = NEW.idRestaurant
+    AND idPlato = NEW.idPlato
+    AND fecha = CURDATE();
+    IF ventaExistente > 0 THEN
+        UPDATE VentaResto
+        SET monto = monto + (NEW.detalle * NEW.cantPlatos)
+        WHERE idRestaurant = NEW.idRestaurant
+        AND idPlato = NEW.idPlato
+        AND fecha = CURDATE();
     ELSE
-        UPDATE Venta 
-        SET monto = monto + NEW.monto
-        WHERE idVenta = venta_id;
+        INSERT INTO VentaResto (idRestaurant, idPlato, fecha, monto)
+        VALUES (NEW.idRestaurant, NEW.idPlato, CURDATE(), (NEW.detalle * NEW.cantPlatos));
     END IF;
-END;
-call incrementar_monto_venta(1,'2023/08/03',9);
-select * from VentaResto;
+END$$
+DELIMITER $$
+--
+DELIMITER $$
+CREATE TRIGGER DecrementarMontoVenta
+AFTER DELETE ON PlatoPedido
+FOR EACH ROW
+BEGIN
+    UPDATE VentaResto
+    SET monto = monto - (OLD.detalle * OLD.cantPlatos)
+    WHERE idRestaurant = OLD.idRestaurant
+    AND idPlato = OLD.idPlato
+    AND fecha = CURDATE();
+END$$
+DELIMITER $$
